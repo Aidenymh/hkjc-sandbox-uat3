@@ -17,12 +17,12 @@ on:
       tfc_organization:
         description: 'Terraform Cloud 组织名称'
         required: true
-        default: 'hkjc-sandbox-uat'
+        default: 'HKJC-TFC-Nonprod1'
         type: string
       tfc_workspace:
         description: 'Terraform Cloud 工作空间名称'
         required: true
-        default: 'sandbox-uat-test'
+        default: 'tencent-core-network-nonprod'
         type: string
       confirm_apply:
         description: '确认要执行 Terraform Apply 吗？'
@@ -83,8 +83,8 @@ jobs:
         echo "TFC_ORG: $TFC_ORG"
         echo "WORKSPACE: $WORKSPACE"
         echo "Environment: ${{ github.event.inputs.environment || 'nonprod' }}"
-        echo "TFC Organization: ${{ github.event.inputs.tfc_organization || 'hkjc-sandbox-uat' }}"
-        echo "TFC Workspace: ${{ github.event.inputs.tfc_workspace || 'sandbox-uat-test' }}"
+        echo "TFC Organization: ${{ github.event.inputs.tfc_organization || 'HKJC-TFC-Nonprod1' }}"
+        echo "TFC Workspace: ${{ github.event.inputs.tfc_workspace || 'tencent-core-network-nonprod' }}"
 
     - name: Terraform Plan
       id: plan
@@ -178,8 +178,8 @@ jobs:
         echo "TFC_ORG: $TFC_ORG"
         echo "WORKSPACE: $WORKSPACE"
         echo "Environment: ${{ github.event.inputs.environment || 'nonprod' }}"
-        echo "TFC Organization: ${{ github.event.inputs.tfc_organization || 'hkjc-sandbox-uat' }}"
-        echo "TFC Workspace: ${{ github.event.inputs.tfc_workspace || 'hkjc-sandbox-uat' }}"
+        echo "TFC Organization: ${{ github.event.inputs.tfc_organization || 'HKJC-TFC-Nonprod1' }}"
+        echo "TFC Workspace: ${{ github.event.inputs.tfc_workspace || 'HKJC-TFC-Nonprod1' }}"
 
     # 下载 plan 文件
     - name: Download Terraform Plan
