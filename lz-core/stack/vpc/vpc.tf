@@ -1,5 +1,5 @@
 module "vpc" {
-  source     = "../../modules/vpc"
+  source     = "../../../modules/vpc"
   for_each   = try(local.vpc_info, {})
   vpc_name   = try(each.value.vpc_name, null)
   vpc_cidr   = try(each.value.cidr_block, null)
