@@ -1,4 +1,4 @@
-name: Deploy to TFC via Issue
+name: Deploy to TFC via Issue1
 
 on:
   issues:
