@@ -8,6 +8,6 @@
 # VPC Stack
 # ========================================
 module "vpc" {
-  source = "./vpc"
+  source = "../modules/vpc"
   environment = var.environment
 }
