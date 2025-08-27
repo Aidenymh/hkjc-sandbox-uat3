@@ -1,0 +1,37 @@
+region_info:
+  region: ap-guangzhou
+
+vpc_info:
+  vpc01:
+    vpc_name: hkjc-sandbox-prod-vpc01
+    cidr_block: 10.0.0.0/16
+    assistant_cidrs: 
+    - 172.16.0.0/16
+    dns_servers: 
+    - 183.60.82.98
+    - 183.60.83.19
+    is_multicast: false
+    tags:
+      create-project: hkjc-sandbox-prod-vpc01
+      create-owner: terraform
+
+  vpc02:
+    vpc_name: hkjc-sandbox-prod-vpc02
+    cidr_block: 10.0.0.0/16
+    assistant_cidrs: 
+    - 172.16.0.0/16
+    dns_servers: 
+    - 183.60.82.98
+    - 183.60.83.19
+    is_multicast: false
+    tags:
+      create-project: hkjc-sandbox-prod-vpc02
+      create-owner: terraform
+
+
+    
+
+
+
+
+

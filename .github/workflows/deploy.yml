@@ -1,0 +1,42 @@
+name: Deploy to TFC
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        env: [nonprod, prod]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Deploy to ${{ matrix.env }}
+        env:
+          TFC_TOKEN: ${{ secrets.TFC_TOKEN }}
+          TFC_ORG: ${{ secrets.TFC_ORG }}
+          ENV: ${{ matrix.env }}
+        run: |
+          curl -H "Authorization: Bearer $TFC_TOKEN" \
+               -H "Content-Type: application/vnd.api+json" \
+               -X POST \
+               -d '{
+                 "data": {
+                   "type": "runs",
+                   "attributes": {
+                     "message": "Triggered from GitHub Actions for $ENV"
+                   },
+                   "relationships": {
+                     "workspace": {
+                       "data": {
+                         "type": "workspaces",
+                         "id": "tencent-core-network-$ENV"
+                       }
+                     }
+                   }
+                 }
+               }' \
+               "https://app.terraform.io/api/v2/runs"
