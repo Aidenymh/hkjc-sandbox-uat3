@@ -1,25 +1,63 @@
-name: Deploy to TFC
+name: Deploy to TFC via Issue
 
 on:
-  push:
-    branches: [main]
+  issues:
+    types: [opened, edited]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        env: [nonprod, prod]
+    # 只处理包含特定标签的issue
+    if: contains(github.event.issue.labels.*.name, 'deploy')
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Deploy to ${{ matrix.env }}
+      - name: Parse Issue Body
+        id: parse_issue
+        run: |
+          # 从issue内容中提取参数
+          ISSUE_BODY="${{ github.event.issue.body }}"
+          
+          # 提取environment (nonprod 或 prod)
+          if echo "$ISSUE_BODY" | grep -qi "nonprod"; then
+            echo "environment=nonprod" >> $GITHUB_OUTPUT
+          elif echo "$ISSUE_BODY" | grep -qi "prod"; then
+            echo "environment=prod" >> $GITHUB_OUTPUT
+          else
+            echo "environment=nonprod" >> $GITHUB_OUTPUT
+            echo "::warning::No environment specified, defaulting to nonprod"
+          fi
+          
+          # 提取TFC organization
+          TFC_ORG=$(echo "$ISSUE_BODY" | grep -oP 'organization[:\s]*([^\n\r]+)' | sed 's/organization[:\s]*//' | tr -d ' ')
+          if [ -n "$TFC_ORG" ]; then
+            echo "tfc_organization=$TFC_ORG" >> $GITHUB_OUTPUT
+          else
+            echo "tfc_organization=${{ secrets.TFC_ORG }}" >> $GITHUB_OUTPUT
+            echo "::warning::No organization specified, using default from secrets"
+          fi
+          
+          # 提取TFC workspace
+          TFC_WORKSPACE=$(echo "$ISSUE_BODY" | grep -oP 'workspace[:\s]*([^\n\r]+)' | sed 's/workspace[:\s]*//' | tr -d ' ')
+          if [ -n "$TFC_WORKSPACE" ]; then
+            echo "tfc_workspace=$TFC_WORKSPACE" >> $GITHUB_OUTPUT
+          else
+            echo "tfc_workspace=tencent-core-network-${{ steps.parse_issue.outputs.environment }}" >> $GITHUB_OUTPUT
+            echo "::warning::No workspace specified, using default pattern"
+          fi
+
+      - name: Deploy to TFC
         env:
           TFC_TOKEN: ${{ secrets.TFC_TOKEN }}
-          TFC_ORG: ${{ secrets.TFC_ORG }}
-          ENV: ${{ matrix.env }}
+          TFC_ORG: ${{ steps.parse_issue.outputs.tfc_organization }}
+          TFC_WORKSPACE: ${{ steps.parse_issue.outputs.tfc_workspace }}
+          ENV: ${{ steps.parse_issue.outputs.environment }}
         run: |
+          echo "Deploying to environment: $ENV"
+          echo "TFC Organization: $TFC_ORG"
+          echo "TFC Workspace: $TFC_WORKSPACE"
+          
           curl -H "Authorization: Bearer $TFC_TOKEN" \
                -H "Content-Type: application/vnd.api+json" \
                -X POST \
@@ -27,16 +65,39 @@ jobs:
                  "data": {
                    "type": "runs",
                    "attributes": {
-                     "message": "Triggered from GitHub Actions for $ENV"
+                     "message": "Triggered from GitHub Issue for $ENV environment"
                    },
                    "relationships": {
                      "workspace": {
                        "data": {
                          "type": "workspaces",
-                         "id": "tencent-core-network-$ENV"
+                         "id": "$TFC_WORKSPACE"
                        }
                      }
                    }
                  }
                }' \
                "https://app.terraform.io/api/v2/runs"
+          
+          echo "Deployment triggered successfully!"
+
+      - name: Comment on Issue
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const environment = '${{ steps.parse_issue.outputs.environment }}';
+            const tfc_org = '${{ steps.parse_issue.outputs.tfc_organization }}';
+            const tfc_workspace = '${{ steps.parse_issue.outputs.tfc_workspace }}';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ **Deployment Triggered Successfully!**
+              
+              **Environment:** ${environment}
+              **TFC Organization:** ${tfc_org}
+              **TFC Workspace:** ${tfc_workspace}
+              
+              The deployment has been initiated. You can monitor the progress in Terraform Cloud.`
+            });
