@@ -1,8 +1,8 @@
 terraform {
   cloud {
-    organization = var.tfc_organization
+    organization = "HKJC-TFC-Nonprod1"
     workspaces {
-      name = var.tfc_workspace
+      name = "tencent-core-network-nonprod"
     }
   }
   required_version = ">=1.0.0"
