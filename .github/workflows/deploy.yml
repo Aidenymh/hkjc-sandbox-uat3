@@ -1,103 +1,189 @@
-name: Deploy to TFC via Issue1
+name: 'Terraform'
 
 on:
-  issues:
-    types: [opened, edited]
+  push:
+    branches: [ "main" ]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: '选择部署环境'
+        required: true
+        default: 'nonprod'
+        type: choice
+        options:
+          - nonprod
+          - prod
+      tfc_organization:
+        description: 'Terraform Cloud 组织名称'
+        required: true
+        default: 'hkjc-sandbox-uat'
+        type: string
+      tfc_workspace:
+        description: 'Terraform Cloud 工作空间名称'
+        required: true
+        default: 'sandbox-uat-test'
+        type: string
+      confirm_apply:
+        description: '确认要执行 Terraform Apply 吗？'
+        required: true
+        default: 'false'
+        type: boolean
+
+# 只保留 TFC_TOKEN 环境变量
+env:
+  TFC_TOKEN: ${{ secrets.TFC_TOKEN }}
+
+permissions:
+  contents: write
+  actions: write
+  pull-requests: write
+  issues: write
+  id-token: write
 
 jobs:
-  deploy:
+  terraform-plan:
+    name: 'Terraform Plan - ${{ github.event.inputs.environment || 'nonprod' }}'
     runs-on: ubuntu-latest
-    # 只处理包含特定标签的issue
-    if: contains(github.event.issue.labels.*.name, 'deploy')
+
+    defaults:
+      run:
+        shell: bash
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      - name: Parse Issue Body
-        id: parse_issue
-        run: |
-          # 从issue内容中提取参数
-          ISSUE_BODY="${{ github.event.issue.body }}"
-          
-          # 提取environment (nonprod 或 prod)
-          if echo "$ISSUE_BODY" | grep -qi "nonprod"; then
-            echo "environment=nonprod" >> $GITHUB_OUTPUT
-          elif echo "$ISSUE_BODY" | grep -qi "prod"; then
-            echo "environment=prod" >> $GITHUB_OUTPUT
-          else
-            echo "environment=nonprod" >> $GITHUB_OUTPUT
-            echo "::warning::No environment specified, defaulting to nonprod"
-          fi
-          
-          # 提取TFC organization
-          TFC_ORG=$(echo "$ISSUE_BODY" | grep -oP 'organization[:\s]*([^\n\r]+)' | sed 's/organization[:\s]*//' | tr -d ' ')
-          if [ -n "$TFC_ORG" ]; then
-            echo "tfc_organization=$TFC_ORG" >> $GITHUB_OUTPUT
-          else
-            echo "tfc_organization=${{ secrets.TFC_ORG }}" >> $GITHUB_OUTPUT
-            echo "::warning::No organization specified, using default from secrets"
-          fi
-          
-          # 提取TFC workspace
-          TFC_WORKSPACE=$(echo "$ISSUE_BODY" | grep -oP 'workspace[:\s]*([^\n\r]+)' | sed 's/workspace[:\s]*//' | tr -d ' ')
-          if [ -n "$TFC_WORKSPACE" ]; then
-            echo "tfc_workspace=$TFC_WORKSPACE" >> $GITHUB_OUTPUT
-          else
-            echo "tfc_workspace=tencent-core-network-${{ steps.parse_issue.outputs.environment }}" >> $GITHUB_OUTPUT
-            echo "::warning::No workspace specified, using default pattern"
-          fi
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
+      with:
+        cli_config_credentials_token: ${{ secrets.TFC_TOKEN }}
 
-      - name: Deploy to TFC
-        env:
-          TFC_TOKEN: ${{ secrets.TFC_TOKEN }}
-          TFC_ORG: ${{ steps.parse_issue.outputs.tfc_organization }}
-          TFC_WORKSPACE: ${{ steps.parse_issue.outputs.tfc_workspace }}
-          ENV: ${{ steps.parse_issue.outputs.environment }}
-        run: |
-          echo "Deploying to environment: $ENV"
-          echo "TFC Organization: $TFC_ORG"
-          echo "TFC Workspace: $TFC_WORKSPACE"
-          
-          curl -H "Authorization: Bearer $TFC_TOKEN" \
-               -H "Content-Type: application/vnd.api+json" \
-               -X POST \
-               -d '{
-                 "data": {
-                   "type": "runs",
-                   "attributes": {
-                     "message": "Triggered from GitHub Issue for $ENV environment"
-                   },
-                   "relationships": {
-                     "workspace": {
-                       "data": {
-                         "type": "workspaces",
-                         "id": "$TFC_WORKSPACE"
-                       }
-                     }
-                   }
-                 }
-               }' \
-               "https://app.terraform.io/api/v2/runs"
-          
-          echo "Deployment triggered successfully!"
+    - name: Terraform Init
+      env:
+        TF_LOG: DEBUG
+      run: |
+        echo "Initializing Terraform with HCP Terraform..."
+        terraform version
+        terraform init -no-color
+      working-directory: lz-core
 
-      - name: Comment on Issue
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const environment = '${{ steps.parse_issue.outputs.environment }}';
-            const tfc_org = '${{ steps.parse_issue.outputs.tfc_organization }}';
-            const tfc_workspace = '${{ steps.parse_issue.outputs.tfc_workspace }}';
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `✅ **Deployment Triggered Successfully!**
-              
-              **Environment:** ${environment}
-              **TFC Organization:** ${tfc_org}
-              **TFC Workspace:** ${tfc_workspace}
-              
-              The deployment has been initiated. You can monitor the progress in Terraform Cloud.`
-            });
+    - name: Terraform Format
+      run: terraform fmt -check
+      working-directory: lz-core
+
+    - name: Check Env Variables
+      run: |
+        echo "=== 环境变量检查 ==="
+        echo "TFC_TOKEN: ${#TFC_TOKEN} characters"
+        echo "Environment: ${{ github.event.inputs.environment || 'nonprod' }}"
+        echo "TFC Organization: ${{ github.event.inputs.tfc_organization || 'hkjc-sandbox-uat' }}"
+        echo "TFC Workspace: ${{ github.event.inputs.tfc_workspace || 'sandbox-uat-test' }}"
+
+    - name: Terraform Plan
+      id: plan
+      env:
+        TF_VAR_environment: ${{ github.event.inputs.environment || 'nonprod' }}
+        TF_VAR_tfc_organization: ${{ github.event.inputs.tfc_organization || 'hkjc-sandbox-uat' }}
+        TF_VAR_tfc_workspace: ${{ github.event.inputs.tfc_workspace || 'sandbox-uat-test' }}
+      run: |
+        echo "Environment: $TF_VAR_environment"
+        echo "TFC Organization: $TF_VAR_tfc_organization"
+        echo "TFC Workspace: $TF_VAR_tfc_workspace"
+        terraform plan -out=tfplan -input=false
+      working-directory: lz-core
+
+    # 上传 plan 文件以供 apply job 使用
+    - name: Upload Terraform Plan
+      uses: actions/upload-artifact@v4
+      with:
+        name: tfplan-${{ github.event.inputs.environment || 'nonprod' }}
+        path: lz-core/tfplan
+
+    # 提示需要手动执行 Apply (仅在推送代码时显示)
+    - name: Manual Apply Required
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        echo "✅ Terraform Plan 完成"
+        echo "📋 环境: ${{ github.event.inputs.environment || 'nonprod' }}"
+        echo "📋 请查看上面的 Plan 结果"
+        echo "🚀 如需执行 Apply，请审批issue"
+
+  # 手动审批 job - 在推送到 main 分支时触发
+  manual-approval:
+    name: '等待人工审批 - ${{ github.event.inputs.environment || 'nonprod' }}'
+    runs-on: ubuntu-latest
+    needs: terraform-plan
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    - name: 等待人工审批
+      uses: trstringer/manual-approval@v1
+      with:
+        secret: ${{ github.token }}
+        approvers: "Aidenymh"
+        minimum-approvals: 1
+        issue-title: "Terraform Apply 审批请求 - ${{ github.event.inputs.environment || 'nonprod' }}"
+        issue-body: |
+          ## Terraform Apply 审批请求
+          
+          **环境**: ${{ github.event.inputs.environment || 'nonprod' }}
+          **TFC 组织**: ${{ github.event.inputs.tfc_organization || 'hkjc-sandbox-uat' }}
+          **TFC 工作空间**: ${{ github.event.inputs.tfc_workspace || 'sandbox-uat-test' }}
+          **工作流运行**: ${{ github.run_id }}
+          **分支**: ${{ github.ref }}
+          **提交**: ${{ github.sha }}
+          **提交者**: ${{ github.actor }}
+          
+          请查看 Terraform Plan 结果，确认后批准此次部署。
+          
+          [查看工作流详情](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          
+          回复 "approved", "approve", "lgtm", "yes" 来批准继续，或 "denied", "deny", "no" 来取消。
+
+  terraform-apply:
+    name: 'Terraform Apply (已审批) - ${{ github.event.inputs.environment || 'nonprod' }}'
+    runs-on: ubuntu-latest
+    needs: [terraform-plan, manual-approval]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
+      with:
+        cli_config_credentials_token: ${{ secrets.TFC_TOKEN }}
+
+    - name: Terraform Init
+      run: terraform init
+      working-directory: lz-core
+
+    - name: Check Env Variables (Apply Job)
+      run: |
+        echo "=== Apply Job 环境变量检查 ==="
+        echo "TFC_TOKEN: ${#TFC_TOKEN} characters"
+        echo "Environment: ${{ github.event.inputs.environment || 'nonprod' }}"
+        echo "TFC Organization: ${{ github.event.inputs.tfc_organization || 'hkjc-sandbox-uat' }}"
+        echo "TFC Workspace: ${{ github.event.inputs.tfc_workspace || 'sandbox-uat-test' }}"
+
+    # 下载 plan 文件
+    - name: Download Terraform Plan
+      uses: actions/download-artifact@v4
+      with:
+        name: tfplan-${{ github.event.inputs.environment || 'nonprod' }}
+        path: lz-core/
+
+    # 执行 Apply
+    - name: Terraform Apply
+      env:
+        TF_VAR_environment: ${{ github.event.inputs.environment || 'nonprod' }}
+        TF_VAR_tfc_organization: ${{ github.event.inputs.tfc_organization || 'hkjc-sandbox-uat' }}
+        TF_VAR_tfc_workspace: ${{ github.event.inputs.tfc_workspace || 'sandbox-uat-test' }}
+      run: terraform apply -auto-approve -input=false tfplan
+      working-directory: lz-core
