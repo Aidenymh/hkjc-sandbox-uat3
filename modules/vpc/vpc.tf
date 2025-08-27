@@ -1,10 +1,12 @@
 # VPC资源
 resource "tencentcloud_vpc" "vpc" {
-  for_each = try(local.vpc_info, {})     # 从YAML配置文件读取的VPC信息
-  name         = try(each.value.vpc_name, null)
-  cidr_block   = try(each.value.cidr_block, null)
-  dns_servers  = try(each.value.dns_servers, null)
-  is_multicast = try(each.value.is_multicast, true)
-  assistant_cidrs = try(each.value.assistant_cidrs, [])
-  tags             = try(each.value.tags, null)
+  name         = var.vpc_name
+  cidr_block   = var.vpc_cidr
+  dns_servers  = var.vpc_dns_servers
+  is_multicast = var.vpc_is_multicast
+  assistant_cidrs = var.vpc_assistant_cidrs
+
+  # 直接使用传入的标签，不进行额外处理
+  tags = var.tags
+
 }
