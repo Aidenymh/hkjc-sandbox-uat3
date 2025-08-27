@@ -30,9 +30,12 @@ on:
         default: 'false'
         type: boolean
 
-# 只保留 TFC_TOKEN 环境变量
+# 从 GitHub Secrets 读取环境变量
 env:
   TFC_TOKEN: ${{ secrets.TFC_TOKEN }}
+  ENV: ${{ secrets.ENV }}
+  TFC_ORG: ${{ secrets.TFC_ORG }}
+  WORKSPACE: ${{ secrets.WORKSPACE }}
 
 permissions:
   contents: write
@@ -76,6 +79,9 @@ jobs:
       run: |
         echo "=== 环境变量检查 ==="
         echo "TFC_TOKEN: ${#TFC_TOKEN} characters"
+        echo "ENV: $ENV"
+        echo "TFC_ORG: $TFC_ORG"
+        echo "WORKSPACE: $WORKSPACE"
         echo "Environment: ${{ github.event.inputs.environment || 'nonprod' }}"
         echo "TFC Organization: ${{ github.event.inputs.tfc_organization || 'hkjc-sandbox-uat' }}"
         echo "TFC Workspace: ${{ github.event.inputs.tfc_workspace || 'sandbox-uat-test' }}"
@@ -84,8 +90,8 @@ jobs:
       id: plan
       env:
         TF_VAR_environment: ${{ github.event.inputs.environment || 'nonprod' }}
-        TF_VAR_tfc_organization: ${{ github.event.inputs.tfc_organization || 'hkjc-sandbox-uat' }}
-        TF_VAR_tfc_workspace: ${{ github.event.inputs.tfc_workspace || 'sandbox-uat-test' }}
+        TF_VAR_tfc_organization: $TFC_ORG
+        TF_VAR_tfc_workspace: $WORKSPACE
       run: |
         echo "Environment: $TF_VAR_environment"
         echo "TFC Organization: $TF_VAR_tfc_organization"
@@ -128,8 +134,8 @@ jobs:
           ## Terraform Apply 审批请求
           
           **环境**: ${{ github.event.inputs.environment || 'nonprod' }}
-          **TFC 组织**: ${{ github.event.inputs.tfc_organization || 'hkjc-sandbox-uat' }}
-          **TFC 工作空间**: ${{ github.event.inputs.tfc_workspace || 'sandbox-uat-test' }}
+          **TFC 组织**: $TFC_ORG
+          **TFC 工作空间**: $WORKSPACE
           **工作流运行**: ${{ github.run_id }}
           **分支**: ${{ github.ref }}
           **提交**: ${{ github.sha }}
@@ -168,9 +174,12 @@ jobs:
       run: |
         echo "=== Apply Job 环境变量检查 ==="
         echo "TFC_TOKEN: ${#TFC_TOKEN} characters"
+        echo "ENV: $ENV"
+        echo "TFC_ORG: $TFC_ORG"
+        echo "WORKSPACE: $WORKSPACE"
         echo "Environment: ${{ github.event.inputs.environment || 'nonprod' }}"
         echo "TFC Organization: ${{ github.event.inputs.tfc_organization || 'hkjc-sandbox-uat' }}"
-        echo "TFC Workspace: ${{ github.event.inputs.tfc_workspace || 'sandbox-uat-test' }}"
+        echo "TFC Workspace: ${{ github.event.inputs.tfc_workspace || 'hkjc-sandbox-uat' }}"
 
     # 下载 plan 文件
     - name: Download Terraform Plan
@@ -183,7 +192,7 @@ jobs:
     - name: Terraform Apply
       env:
         TF_VAR_environment: ${{ github.event.inputs.environment || 'nonprod' }}
-        TF_VAR_tfc_organization: ${{ github.event.inputs.tfc_organization || 'hkjc-sandbox-uat' }}
-        TF_VAR_tfc_workspace: ${{ github.event.inputs.tfc_workspace || 'sandbox-uat-test' }}
+        TF_VAR_tfc_organization: $TFC_ORG
+        TF_VAR_tfc_workspace: $WORKSPACE
       run: terraform apply -auto-approve -input=false tfplan
       working-directory: lz-core
