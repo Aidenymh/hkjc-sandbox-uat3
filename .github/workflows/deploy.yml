@@ -43,7 +43,7 @@ permissions:
 
 jobs:
   terraform-plan:
-    name: 'Terraform Plan - ${{ github.event.inputs.environment || 'nonprod' }}'
+    name: "Terraform Plan - ${{ github.event.inputs.environment || 'nonprod' }}"
     runs-on: ubuntu-latest
 
     defaults:
@@ -111,7 +111,7 @@ jobs:
 
   # 手动审批 job - 在推送到 main 分支时触发
   manual-approval:
-    name: '等待人工审批 - ${{ github.event.inputs.environment || 'nonprod' }}'
+    name: "等待人工审批 - ${{ github.event.inputs.environment || 'nonprod' }}"
     runs-on: ubuntu-latest
     needs: terraform-plan
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -142,7 +142,7 @@ jobs:
           回复 "approved", "approve", "lgtm", "yes" 来批准继续，或 "denied", "deny", "no" 来取消。
 
   terraform-apply:
-    name: 'Terraform Apply (已审批) - ${{ github.event.inputs.environment || 'nonprod' }}'
+    name: "Terraform Apply (已审批) - ${{ github.event.inputs.environment || 'nonprod' }}"
     runs-on: ubuntu-latest
     needs: [terraform-plan, manual-approval]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
